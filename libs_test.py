@@ -7,7 +7,7 @@ from scipy.integrate import quad
 from numpy.linalg import solve
 from matplotlib import pyplot
 from time import time
-naca_filepath = os.path.join('resources', '0012.txt')
+naca_filepath = os.path.join('0012.txt')
 width = 10
 from time import time
 from multiprocessing import Pool
