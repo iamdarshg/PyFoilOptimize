@@ -140,7 +140,7 @@ def for_par(x,y, itera):
     return scipy.optimize.minimize(
         x0=y,
         fun=main,
-        method='Nelder-Mead',
+        method='SLSQP',
         options={
             'maxiter': int(itera),
         },
@@ -207,13 +207,13 @@ def integral(x, y, panel, dxdk, dydk):
     xa = panel.xa
     ya = panel.ya
     beta = panel.beta
-    @jit(nopython = True, fastmath = True)
+    @jit(nopython = True, fastmath = True, )
     def integrand(s):
         return (((x - (xa - sin(beta) * s)) * dxdk +
                 (y - (ya + cos(beta) * s)) * dydk) /
                 ((x - (xa - sin(beta) * s))**2 +
                 (y - (ya + cos(beta) * s))**2) )
-    return quad(integrand, 0.0, (panel.length+uniform(2e-20, 1e-20)), limit=int(5e5))[0]
+    return quad(integrand, 0.0, (panel.length+uniform(2e-8, 1e-8)), limit=int(5e3), epsabs=1.49e-7, epsrel=1.49e-7)[0]
 
 def source_contribution_normal(panels):
     A = empty((panels.size, panels.size), dtype=float)
@@ -348,7 +348,7 @@ if __name__ == '__main__':
         x, y = loadtxt(infile, dtype=float, unpack=True)
     class oof():
         x=y
-    # plots(x=x, res = oof)
-    plots(x, res = for_par(x,y, itera=5e3))
+    plots(x=x, res = oof)
+    plots(x, res = for_par(x,y, itera=50))
     endtime = time()
     print(f"Time take = {round(endtime-starttime, 6)}")
