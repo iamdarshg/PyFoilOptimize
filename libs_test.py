@@ -26,7 +26,7 @@ def plots(x,res):
     q1 = Queue()
     q2 = Queue()
     q3 = Queue()
-    p1 = Process(target = define_panels, args=(q1, x, y, 70))
+    p1 = Process(target = define_panels, args=(q1, x, y, 130))
     p1.start()
     freestream = Freestream(u_inf=1.0, alpha=4.0)
     panels = q1.get()
@@ -225,7 +225,7 @@ def integral(x, y, panel, dxdk, dydk):
                 (y - (ya + cos(beta) * s)) * dydk) /
                 ((x - (xa - sin(beta) * s))**2 +
                 (y - (ya + cos(beta) * s))**2) )
-    return quad(integrand, 0.0, (panel.length+uniform(2e-20, 1e-20)), limit=int(5e2))[0]
+    return quad(integrand, 0.0, (panel.length+uniform(2e-20, 1e-20)), limit=int(5e4))[0]
 
 def source_contribution_normal(panels, q2):
     A = empty((panels.size, panels.size), dtype=float)
@@ -333,7 +333,7 @@ def main(y):
     q1 = Queue()
     q2 = Queue()
     q3 = Queue()
-    p1 = Process(target = define_panels, args=(q1, x, y, 70))
+    p1 = Process(target = define_panels, args=(q1, x, y, 130))
     p1.start()
     freestream = Freestream(u_inf=1.0, alpha=4.0)
     panels = q1.get()
@@ -384,6 +384,6 @@ if __name__ == '__main__':
     class oof():
         x=y
     plots(x=x, res = oof)
-    plots(x, res = for_par(x,y, itera=1e2))
+    plots(x, res = for_par(x,y, itera=8e2))
     endtime = time()
     print(f"Time take = {round((endtime-starttime)/60, 6)}")
