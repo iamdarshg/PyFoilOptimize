@@ -10,7 +10,6 @@ from time import time
 naca_filepath = os.path.join('0012.txt')
 width = 10
 from time import time
-from multiprocessing import Pool
 import scipy
 alfa = 1
 from numba import jit
@@ -205,11 +204,15 @@ class Freestream:
         self.alpha = radians(alpha)  # degrees to radians
 
 def integral(x, y, panel, dxdk, dydk):
+    xa = panel.xa
+    ya = panel.ya
+    beta = panel.beta
+    @jit(nopython = True, fastmath = True)
     def integrand(s):
-        return (((x - (panel.xa - sin(panel.beta) * s)) * dxdk +
-                (y - (panel.ya + cos(panel.beta) * s)) * dydk) /
-                ((x - (panel.xa - sin(panel.beta) * s))**2 +
-                (y - (panel.ya + cos(panel.beta) * s))**2) )
+        return (((x - (xa - sin(beta) * s)) * dxdk +
+                (y - (ya + cos(beta) * s)) * dydk) /
+                ((x - (xa - sin(beta) * s))**2 +
+                (y - (ya + cos(beta) * s))**2) )
     return quad(integrand, 0.0, (panel.length+uniform(2e-20, 1e-20)), limit=int(5e5))[0]
 
 def source_contribution_normal(panels):
