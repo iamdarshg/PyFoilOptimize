@@ -31,22 +31,40 @@ def plots(x,res):
     freestream = Freestream(u_inf=1.0, alpha=4.0)
     panels = q1.get()
     p1.join()
+    while not q1.empty():
+        q1.get()
     p2 = Process(target = source_contribution_normal, args=(panels, q2))
     p2.start()
     p3 = Process(target = vortex_contribution_normal, args=(panels, q3))
     p3.start()
-    while q2.empty() or q3.empty():
-        sleep(1e-6)
+    p4 = Process(target = build_freestream_rhs, args = (panels, freestream, q1))
+    p4.start()
+    while q2.empty() or q3.empty() or q1.empty():
+        sleep(1e-15)
     A_source = q2.get()
     B_vortex = q3.get()
+    b = q1.get()
     p2.join()
     p3.join()
-    while not q1.empty():
-        q1.get()
+    p4.join()
     while not q2.empty():
         q2.get()
     A = build_singularity_matrix(A_source, B_vortex)
-    b = build_freestream_rhs(panels, freestream)
+    p6 = Process(target=yya, args=(A,b,q2))
+    p6.start()
+    while q2.empty():
+        sleep(1e-15)
+    strengths = q2.get()
+    p6.join()
+    p5 = Process(target = xxa, args = (panels, strengths))
+    p5.start()
+    p5.join()
+    while q2.empty():
+        sleep(1e-15)
+    strengths = q2.get()
+    while not q2.empty():
+        q2.get()
+    gamma = strengths[-1]
 
     width = 10
     pyplot.figure(figsize=(width, width))
@@ -61,12 +79,6 @@ def plots(x,res):
     pyplot.xlim(-0.1, 1.1)
     pyplot.ylim(-0.1, 0.1)
 
-    strengths = solve(A, b)
-
-    for i , panel in enumerate(panels):
-        panel.sigma = strengths[i]
-
-    gamma = strengths[-1]
 
     compute_tangential_velocity(panels, freestream, gamma, A_source, B_vortex)
 
@@ -148,7 +160,7 @@ def plots(x,res):
     pyplot.savefig("test.pdf", dpi=250)
     pyplot.show()
 
-def for_par(x,y, itera):
+def for_par(y, itera):
     
     baounds = scipy.optimize.Bounds(lb=(-ones(y.shape)*2), ub=(ones(y.shape)*2), keep_feasible=False)
     return scipy.optimize.minimize(
@@ -250,6 +262,9 @@ def vortex_contribution_normal(panels, q3):
     A = empty((panels.size, panels.size), dtype=float)
     # vortex contribution on a panel from itself
     fill_diagonal(A, 0.0)
+    qa=Queue()
+    qb=Queue()
+    qc=Queue
     # vortex contribution on a panel from others
     for i, panel_i in enumerate(panels):
         A = xxye(A, i, panels, panel_i)
@@ -280,13 +295,13 @@ def build_singularity_matrix(A_source, B_vortex):
     A[-1, :] = kutta_condition(A_source, B_vortex)
     return A
 
-def build_freestream_rhs(panels, freestream):
+def build_freestream_rhs(panels, freestream, q1):
     b = empty(panels.size + 1, dtype=float)
     for i, panel in enumerate(panels):
         b[i] = -freestream.u_inf * cos(freestream.alpha - panel.beta)
     b[-1] = -freestream.u_inf * (sin(freestream.alpha - panels[0].beta) +
                                 sin(freestream.alpha - panels[-1].beta) )
-    return b
+    q1.put(b)
 
 def compute_tangential_velocity(panels, freestream, gamma, A_source, B_vortex):
     A = empty((panels.size, panels.size + 1), dtype=float)
@@ -320,16 +335,27 @@ def get_velocity_field(panels, freestream, X, Y):
 def test(panels):
     return max(panel.xa for panel in panels) - min(panel.xa for panel in panels)
 
-def ctest(gamma, panel, freestream, c, panels):
-    return (gamma * check(panel=panel, panels=panels) /(0.5 * freestream * c))
+def ctest(gamma, freestream, c, panels):
+    return (gamma * check(panels=panels) /(0.5 * freestream * c))
 
-def check(panel, panels):
+def check(panels):
     out=0
     for panel in panels:
         out=out+ sqrt((panel.xb - panel.xa)**2 + (panel.yb - panel.ya)**2) 
     return out
 
 def main(y):
+    qmain = Queue()
+    p = Process(target=man, args=(y, qmain, x))
+    p.start()
+    while qmain.empty()==True:
+        sleep(1e-12)
+    if qmain.empty()==False:
+        cl=qmain.get()
+    p.join()
+    return 1e6-(cl**5)
+
+def man(y, qmain, x):
     q1 = Queue()
     q2 = Queue()
     q3 = Queue()
@@ -338,42 +364,57 @@ def main(y):
     freestream = Freestream(u_inf=1.0, alpha=4.0)
     panels = q1.get()
     p1.join()
+    while not q1.empty():
+        q1.get()
     p2 = Process(target = source_contribution_normal, args=(panels, q2))
     p2.start()
     p3 = Process(target = vortex_contribution_normal, args=(panels, q3))
     p3.start()
-    while q2.empty() or q3.empty():
-        sleep(1e-6)
+    p4 = Process(target = build_freestream_rhs, args = (panels, freestream, q1))
+    p4.start()
+    while q2.empty() or q3.empty() or q1.empty():
+        sleep(1e-15)
     A_source = q2.get()
     B_vortex = q3.get()
+    b = q1.get()
     p2.join()
     p3.join()
-    while not q1.empty():
-        q1.get()
+    p4.join()
     while not q2.empty():
         q2.get()
     A = build_singularity_matrix(A_source, B_vortex)
-    b = build_freestream_rhs(panels, freestream)
+    p6 = Process(target=yya, args=(A,b,q2))
+    p6.start()
+    while q2.empty():
+        sleep(1e-15)
+    strengths = q2.get()
+    p6.join()
+    p5 = Process(target = xxa, args = (panels, strengths))
+    p5.start()
+    p5.join()
 
-    strengths = solve(A, b)
-
-    for i , panel in enumerate(panels):
-        panel.sigma = strengths[i]
-
+    while not q2.empty():
+        q2.get()
     gamma = strengths[-1]
 
     compute_tangential_velocity(panels, freestream, gamma, A_source, B_vortex)
     compute_pressure_coefficient(panels, freestream)
     c = test(panels=panels)
-    cl= ctest(gamma=gamma, panels=panels, freestream=freestream.u_inf, c=c, panel = panel)
-
-    return 1e6-(cl**5)
+    cl= ctest(gamma=gamma, panels=panels, freestream=freestream.u_inf, c=c,)
+    qmain.put(cl)
 
 def drag(panels):
     frontcp = sum([panel.cp for panel in panels if panel.xb > 0.5])
     backcp = sum([panel.cp for panel in panels if panel.xb <= 0.5])
-    return (frontcp-backcp)
+    return (frontcp-backcp)/130
 
+def xxa(panels, strengths):
+    for i , panel in enumerate(panels):
+        panel.sigma = strengths[i]
+
+def yya(A, b, qx):
+    strengths = solve(A, b)
+    qx.put(strengths)
 
 if __name__ == '__main__':
     global x
@@ -383,7 +424,7 @@ if __name__ == '__main__':
     y = loadtxt(open('00121.txt', 'r'), dtype = float, unpack = True)
     class oof():
         x=y
-    plots(x=x, res = oof)
-    plots(x, res = for_par(x,y, itera=8e2))
+    # plots(x=x, res = oof)
+    plots(x, res = for_par(y, itera=800))
     endtime = time()
     print(f"Time take = {round((endtime-starttime)/60, 6)}")
