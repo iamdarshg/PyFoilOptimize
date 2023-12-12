@@ -23,7 +23,7 @@ def plots(x,res):
     except:
         print("txt failed")
     y = (y+uniform(1e-20, 1e-21))
-    panels = define_panels(x, y, N=130)
+    panels = define_panels(x, y, N=70)
     width = 10
     pyplot.figure(figsize=(width, width))
     pyplot.grid()
@@ -130,7 +130,7 @@ def plots(x,res):
     pyplot.title('Contour of pressure field', fontsize=16)
     cd= drag(panels)
     print('lift coefficient: CL = {:0.3f}'.format(cl))
-    print(f"drag coefficient={cd}")
+    print(f"drag coefficient= {cd}")
     pyplot.savefig("test.pdf", dpi=250)
     pyplot.show()
 
@@ -140,7 +140,7 @@ def for_par(x,y, itera):
     return scipy.optimize.minimize(
         x0=y,
         fun=main,
-        method='SLSQP',
+        method='Nelder-Mead',
         options={
             'maxiter': int(itera),
         },
@@ -207,13 +207,13 @@ def integral(x, y, panel, dxdk, dydk):
     xa = panel.xa
     ya = panel.ya
     beta = panel.beta
-    @jit(nopython = True, fastmath = True, )
+    # @jit(nopython = True, fastmath = True)
     def integrand(s):
         return (((x - (xa - sin(beta) * s)) * dxdk +
                 (y - (ya + cos(beta) * s)) * dydk) /
                 ((x - (xa - sin(beta) * s))**2 +
                 (y - (ya + cos(beta) * s))**2) )
-    return quad(integrand, 0.0, (panel.length+uniform(2e-8, 1e-8)), limit=int(5e3), epsabs=1.49e-7, epsrel=1.49e-7)[0]
+    return quad(integrand, 0.0, (panel.length+uniform(2e-20, 1e-20)), limit=int(5e2))[0]
 
 def source_contribution_normal(panels):
     A = empty((panels.size, panels.size), dtype=float)
@@ -311,7 +311,7 @@ def check(panel, panels):
 
 def main(y):
     
-    panels = define_panels(x, y, N=130)
+    panels = define_panels(x, y, N=70)
     freestream = Freestream(u_inf=1.0, alpha=4.0)
     A_source = source_contribution_normal(panels)
     B_vortex = vortex_contribution_normal(panels)
@@ -346,9 +346,10 @@ if __name__ == '__main__':
     starttime = time()
     with open(naca_filepath, 'r') as infile:
         x, y = loadtxt(infile, dtype=float, unpack=True)
+    y = loadtxt(open('00121.txt', 'r'), dtype = float, unpack = True)
     class oof():
         x=y
     plots(x=x, res = oof)
-    plots(x, res = for_par(x,y, itera=50))
+    plots(x, res = for_par(x,y, itera=5e3))
     endtime = time()
-    print(f"Time take = {round(endtime-starttime, 6)}")
+    print(f"Time take = {round((endtime-starttime)/60, 6)}")
