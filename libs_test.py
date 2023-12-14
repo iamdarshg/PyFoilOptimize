@@ -13,7 +13,7 @@ import scipy
 alfa = 10
 from numba import jit
 from multiprocessing import Process, Queue
-
+import warnings
 
 def plots(x,res):  
     nx, ny = 20, 20
@@ -56,17 +56,22 @@ def plots(x,res):
         sleep(1e-15)
     strengths = q2.get()
     p6.join()
-    p5 = Process(target = xxa, args = (panels, strengths))
-    p5.start()
-    p5.join()
-    while q2.empty():
-        sleep(1e-15)
-    strengths = q2.get()
+    p7= Process(target = xxa, args=(panels, strengths, q1))
+    p7.start()
+    while not q2.empty():
+        q2.get()
+    while q1.empty():
+        sleep(1e-14)
+    if not q1.empty():
+        panels = q1.get()
+        p7.join
+    # xxa(panels,strengths)
+
     while not q2.empty():
         q2.get()
     gamma = strengths[-1]
-
-    width = 10
+    print
+    width = 16  
     pyplot.figure(figsize=(width, width))
     pyplot.grid()
     pyplot.xlabel('x', fontsize=16)
@@ -80,7 +85,15 @@ def plots(x,res):
     pyplot.ylim(-0.1, 0.1)
 
 
-    compute_tangential_velocity(panels, freestream, gamma, A_source, B_vortex)
+    p5 = Process(target = compute_tangential_velocity, args = (panels, freestream, gamma, A_source, B_vortex, q2))
+    p5.start()
+    while q2.empty():
+        sleep(1e-15)
+    if not q2.empty():
+        panels = q2.get()
+        p5.join()
+    while not q2.empty():
+        q2.get()
 
     compute_pressure_coefficient(panels, freestream)
     c = abs(max(panel.xa for panel in panels) -
@@ -103,7 +116,7 @@ def plots(x,res):
     pyplot.xlim(-0.1, 1.1)
     pyplot.ylim(1.0, -2.0)
     pyplot.title(f'Number of panels: {panels.size}', fontsize=16);
-    pyplot.savefig("test2.pdf", dpi=250)
+    pyplot.savefig("test2.pdf", dpi=1250)
 
     accuracy = sum(panel.sigma * panel.length for panel in panels)
     print('sum of singularity strengths: {:0.6f}'.format(accuracy))
@@ -115,7 +128,7 @@ def plots(x,res):
 
     # compute the velocity field on the mesh grid
     u, v = get_velocity_field(panels, freestream, X, Y)
-    width = 10
+    width = 16
     pyplot.figure(figsize=(width, width))
     pyplot.xlabel('x', fontsize=16)
     pyplot.ylabel('y', fontsize=16)
@@ -131,12 +144,12 @@ def plots(x,res):
         f'Streamlines around a NACA 0012 airfoil (AoA = ${alfa}^o$)',
         fontsize=16,
     )
-    pyplot.savefig("test1.pdf", dpi=250)   
+    pyplot.savefig("test1.pdf", dpi=1250)   
     # compute the pressure field
     cp = 1.0 - (u**2 + v**2) / freestream.u_inf**2
 
     # plot the pressure field
-    width = 10
+    width = 16
     pyplot.figure(figsize=(width, width))
     pyplot.xlabel('x', fontsize=16)
     pyplot.ylabel('y', fontsize=16)
@@ -157,21 +170,22 @@ def plots(x,res):
     cd= drag(panels)
     print('lift coefficient: CL = {:0.3f}'.format(cl))
     print(f"drag coefficient= {cd}")
-    pyplot.savefig("test.pdf", dpi=250)
+    pyplot.savefig("test.pdf", dpi=1250)
     pyplot.show()
 
 def for_par(y, itera):
-    
     baounds = scipy.optimize.Bounds(lb=(-ones(y.shape)*2), ub=(ones(y.shape)*2), keep_feasible=False)
-    return scipy.optimize.minimize(
+    
+    z = scipy.optimize.minimize(
         x0=y,
         fun=main,
         method='Nelder-Mead',
         options={
             'maxiter': int(itera),
         },
-        bounds=baounds,
-    )
+        bounds=baounds,)
+        
+    return z
     
 class Panel():
     def __init__(self, xa, ya, xb, yb):   
@@ -231,6 +245,7 @@ def integral(x, y, panel, dxdk, dydk):
     xa = panel.xa
     ya = panel.ya
     beta = panel.beta
+    warnings.filterwarnings("ignore")
     # @jit(nopython = True, fastmath = True)
     def integrand(s):
         return (((x - (xa - sin(beta) * s)) * dxdk +
@@ -303,7 +318,7 @@ def build_freestream_rhs(panels, freestream, q1):
                                 sin(freestream.alpha - panels[-1].beta) )
     q1.put(b)
 
-def compute_tangential_velocity(panels, freestream, gamma, A_source, B_vortex):
+def compute_tangential_velocity(panels, freestream, gamma, A_source, B_vortex, q2):
     A = empty((panels.size, panels.size + 1), dtype=float)
     A[:, :-1] = B_vortex
     A[:, -1] = -np.sum(A_source, axis=1)
@@ -317,6 +332,11 @@ def compute_tangential_velocity(panels, freestream, gamma, A_source, B_vortex):
     
     for i, panel in enumerate(panels):
         panel.vt = tangential_velocities[i]
+    q2.put(panels)
+
+
+global freestreame
+freestreame = Freestream(u_inf=1.0, alpha=4.0)
 
 def compute_pressure_coefficient(panels, freestream):
     for panel in panels:
@@ -345,8 +365,9 @@ def check(panels):
     return out
 
 def main(y):
+    xe=x
     qmain = Queue()
-    p = Process(target=man, args=(y, qmain, x))
+    p = Process(target=man, args=(y, qmain, xe))
     p.start()
     while qmain.empty()==True:
         sleep(1e-12)
@@ -357,15 +378,18 @@ def main(y):
 
 def man(y, qmain, x):
     q1 = Queue()
-    q2 = Queue()
-    q3 = Queue()
     p1 = Process(target = define_panels, args=(q1, x, y, 130))
     p1.start()
-    freestream = Freestream(u_inf=1.0, alpha=4.0)
+    while q1.empty():
+            sleep(1e-16)
     panels = q1.get()
     p1.join()
+    q2 = Queue()
+    q3 = Queue()
+    freestream = freestreame 
     while not q1.empty():
         q1.get()
+    # print(f"panel defined")
     p2 = Process(target = source_contribution_normal, args=(panels, q2))
     p2.start()
     p3 = Process(target = vortex_contribution_normal, args=(panels, q3))
@@ -377,6 +401,7 @@ def man(y, qmain, x):
     A_source = q2.get()
     B_vortex = q3.get()
     b = q1.get()
+    # print(f"p2, 3, 4 complete")
     p2.join()
     p3.join()
     p4.join()
@@ -388,16 +413,32 @@ def man(y, qmain, x):
     while q2.empty():
         sleep(1e-15)
     strengths = q2.get()
+    # print(f"p6 complete")
     p6.join()
-    p5 = Process(target = xxa, args = (panels, strengths))
-    p5.start()
-    p5.join()
-
+    while not q1.empty():
+        q1.get()
+    p7= Process(target = xxa, args=(panels, strengths, q1))
+    p7.start()
     while not q2.empty():
         q2.get()
+    while q1.empty():
+        sleep(1e-14)
+    if not q1.empty():
+        panels = q1.get()
+        p7.join
+    # xxa(panels,strengths)
+    # print(f"p7 complete")
     gamma = strengths[-1]
-
-    compute_tangential_velocity(panels, freestream, gamma, A_source, B_vortex)
+    p5 = Process(target = compute_tangential_velocity, args = (panels, freestream, gamma, A_source, B_vortex, q2))
+    p5.start()
+    while q2.empty():
+        sleep(1e-15)
+    if not q2.empty():
+        panels = q2.get()
+        p5.join()
+    # print(f"p5 complete")
+    while not q2.empty():
+        q2.get()
     compute_pressure_coefficient(panels, freestream)
     c = test(panels=panels)
     cl= ctest(gamma=gamma, panels=panels, freestream=freestream.u_inf, c=c,)
@@ -408,9 +449,10 @@ def drag(panels):
     backcp = sum([panel.cp for panel in panels if panel.xb <= 0.5])
     return (frontcp-backcp)/130
 
-def xxa(panels, strengths):
+def xxa(panels, strengths, q):
     for i , panel in enumerate(panels):
         panel.sigma = strengths[i]
+    q.put(panels)
 
 def yya(A, b, qx):
     strengths = solve(A, b)
@@ -425,6 +467,9 @@ if __name__ == '__main__':
     class oof():
         x=y
     # plots(x=x, res = oof)
-    plots(x, res = for_par(y, itera=800))
+    i=0
+    while (i<8e1):
+        plots(x, res = for_par(y, itera=4e1))
+        i=i+1
     endtime = time()
     print(f"Time take = {round((endtime-starttime)/60, 6)}")
